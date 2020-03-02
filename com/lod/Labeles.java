@@ -1,5 +1,11 @@
 package com.lod;
 
+/**
+ * This enum implements localisation. (English and Russian)
+ *
+ * Usage: Labeles.NAME_OF_LABELE.getValue(language)
+ */
+
 public enum Labeles {
 
     SEARCHING("Searching for devices", "Поиск устройст"),
@@ -17,7 +23,7 @@ public enum Labeles {
     LOCALDEVICE_NOTDISCOVERABLE("Not discoverable", "Не обнаружаемый"),
     LOCALDEVICE_MODE("Mode: ", "Состояние: "),
     LOCALDEVICE_NOTRUNNING("Not running", "Не работает"),
-    LOCALDEVICE_RUNNING("Running: ", "Работает"),
+    LOCALDEVICE_RUNNING("Running ", "Работает"),
 
     REMOTEDEVICE_ADDRESS("Address: ", "Адрес: "),
     REMOTEDEVICE_NAME("Name: ", "Имя: "),

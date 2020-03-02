@@ -3,19 +3,21 @@ package com.lod;
 import java.awt.*;
 import java.io.IOException;
 import java.nio.*;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.Vector;
+import java.util.*;
 import javax.swing.*;
 import javax.swing.border.Border;
 import javax.bluetooth.*;
 
+/**
+ * This class implements GUI initialization, checking LocalDevice info, starting infinite loop of searching
+ * for new Bluetooth devices in the area of LocalDevice.
+ */
 
 public class mainPane extends JPanel {
-    private String language = "eng";
 
+    //language to use ("rus"/"eng")
+    private String language = "rus";
     private BluetoothFinder bf;
-
     private JLabel findLabel;
     private JTextArea devices;
     private JTextArea devInfo;
@@ -24,19 +26,19 @@ public class mainPane extends JPanel {
 
 
 
+    //Initialization of the GUI
     public mainPane() {
-        //init gui
         setBackground(new Color(243, 202, 32));
         setLayout(new FlowLayout(1, 5, 10));
 
-        //init dev text area
+        //init Devices text area
         devices = new JTextArea(21, 22);
         devices.setFont(bigFont);
         devices.setEditable(false);
         JScrollPane devScroller = new JScrollPane(devices, JScrollPane.VERTICAL_SCROLLBAR_ALWAYS, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         devScroller.setBorder(border);
 
-        //init dev info text area
+        //init LocalDevice info text area
         devInfo = new JTextArea(21, 24);
         devInfo.setFont(bigFont);
         devInfo.setEditable(false);
@@ -46,14 +48,20 @@ public class mainPane extends JPanel {
         add(devScroller);
         add(devInfoScroller);
 
+        //creating new BluetoothFinder for local device initialization and bluetooth-device search
         bf = new BluetoothFinder();
     }
 
     protected class BluetoothFinder implements Runnable {
+        //Object represents LocalDevice
         private LocalDevice myLocalDevice;
-        private Set<String> remoteDevicesAddress = new HashSet<>();
+        //Object for bluetooth discovery
         private DiscoveryAgent myDiscoveryAgent;
+        //Listener device discovery and completion of a searching for devices
         private DiscoveryListener myDiscoveryListener;
+        //List of all devices that have been discovered
+        private ArrayList<RemoteBluetoothDevice> remoteDevicesList = new ArrayList<>();
+
 
         public BluetoothFinder() {
            try {
@@ -87,26 +95,28 @@ public class mainPane extends JPanel {
             myDiscoveryListener = new DiscoveryListener() {
                 @Override
                 public void deviceDiscovered(RemoteDevice remoteDevice, DeviceClass deviceClass) {
+                    System.out.println("S");
                     String devAddress = remoteDevice.getBluetoothAddress();
                     String devName = "";
+                    String devType = "";
+                    String devServices = "";
                     try {
                        devName = remoteDevice.getFriendlyName(true);
                     } catch (IOException ioe) {
                         devName = Labeles.REMOTEDEVICE_NAMEUNKNOWN.getValue(language);
                     }
 
-                    if (!remoteDevicesAddress.contains(devAddress)) {
-                        devices.append("Name: " + devName + "\nAddress: " + devAddress + "\n");
+                    new RemoteBluetoothDevice(devName, devAddress, devType, devServices);
 
-                        devices.append("****************\n");
+                    devices.setText(null);
+                    System.out.println(remoteDevicesList.size());
+                    for (RemoteBluetoothDevice dev : remoteDevicesList) {
+                        ArrayList<String> data = dev.getData();
+                        devices.append(Labeles.REMOTEDEVICE_NAME.getValue(language) + data.get(0) + "\n");
+                        devices.append(Labeles.REMOTEDEVICE_ADDRESS.getValue(language) + data.get(1) + "\n");
 
-                    } else if (remoteDevicesAddress.contains(devAddress) && !devName.equals(Labeles.REMOTEDEVICE_NAMEUNKNOWN.getValue(language))) {
-                        devices.append("Name: " + devName + "\nAddress: " + devAddress + "\n");
-
-                        devices.append("***************\n");
-
+                        devices.append("******\n");
                     }
-
 
                 }
 
@@ -122,7 +132,10 @@ public class mainPane extends JPanel {
 
                 @Override
                 public void inquiryCompleted(int i) {
-
+                    System.out.println("Searching is completed!");
+                    synchronized (BluetoothFinder.class) {
+                        BluetoothFinder.class.notifyAll();
+                    }
                 }
 
             };
@@ -131,23 +144,73 @@ public class mainPane extends JPanel {
         }
 
         public void run() {
+            try {
+                while (true) {
+                    myDiscoveryAgent.startInquiry(DiscoveryAgent.GIAC, myDiscoveryListener);
 
-            while (true) {
-                Object inquiryCompletedEvent = new Object();
-                synchronized (inquiryCompletedEvent) {
-                    boolean started = false;
-                    try {
-                        started = myDiscoveryAgent.startInquiry(DiscoveryAgent.GIAC, myDiscoveryListener);
-                    } catch (BluetoothStateException bluetoothE) {
-
+                    synchronized (BluetoothFinder.class) {
+                        BluetoothFinder.class.wait();
                     }
 
                 }
+            } catch (BluetoothStateException bluetoothStateE) {
+                devices.append("AAAAAAAAAAAAAAAAAAAAAAAAAAA!");
+            } catch (InterruptedException it) {
+
             }
         }
 
+        private class RemoteBluetoothDevice {
+            protected String name;
+            protected String address;
+            protected String type;
+            protected String services;
+
+            public RemoteBluetoothDevice(String name, String address, String type, String services) {
+                this.name = name;
+                this.address = address;
+                this.type = type;
+                this.services = services;
+
+                checkUniqueness();
+            }
+
+            public void checkUniqueness() {
+                boolean isPresented = false;
+                for (RemoteBluetoothDevice dev : remoteDevicesList) {
+                    if (dev.equals(this)) {
+                        isPresented = true;
+                    }
+                }
+                if (!isPresented) {
+                    remoteDevicesList.add(this);
+                }
+            }
+
+            public boolean equals(Object obj) {
+                if (obj == null)
+                    return false;
+
+                if (obj instanceof RemoteBluetoothDevice) {
+                    RemoteBluetoothDevice anotherBD = (RemoteBluetoothDevice) obj;
+                    if (anotherBD.name.equals(this.name) && anotherBD.address.equals(this.address)) {
+                        return true;
+                    } else {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+
+            public ArrayList<String> getData() {
+               return new ArrayList<String>(Arrays.asList(name, address, type, services));
+            }
+
+        }
 
 
+        //getting services out of whole Info
         private String getServices(String list) {
             String[] myList = list.split("[()]", 2);
             String ans = "";
@@ -157,6 +220,7 @@ public class mainPane extends JPanel {
             return ans;
         }
 
+
         private Labeles checkDiscoverable(int num) {
             if (num != 0x00) {
                 return Labeles.LOCALDEVICE_DISCOVERABLE;
@@ -164,6 +228,7 @@ public class mainPane extends JPanel {
                 return Labeles.LOCALDEVICE_NOTDISCOVERABLE;
             }
         }
+
 
         private Labeles checkIfRunning(boolean running) {
             if (running) {
